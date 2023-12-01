@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/testing/asserts.ts";
+import { assertEquals } from "https://deno.land/std@0.208.0/assert/assert_equals.ts";
 
 export type CalibrationNumbers = [number, number];
 export function extractCalibrationNumbers(input: string): number[] {
