@@ -1,13 +1,26 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/assert_equals.ts";
 
 export type CalibrationNumbers = [number, number];
-export function extractCalibrationNumbers(input: string): number[] {
+export function extractCalibrationNumbers<T extends ValidNumberString>(
+  validNumberStrings: Record<T, number>,
+  input: string,
+): number[] {
+  const lookForAny: T[] = Object.keys(validNumberStrings) as T[];
   return input
+    .trim()
     .split("\n")
-    .map((line) => line.replace(/[^0-9]/g, ""))
-    .filter((line) => line?.length)
-    .map((line) => [firstChar(line), lastChar(line)] as [string, string])
-    .map((numberStrings) => numberStrings.map(Number) as CalibrationNumbers)
+    .map((line) =>
+      [
+        firstOccurrenceOfAny(lookForAny)(line),
+        lastOccurrenceOfAny(lookForAny)(line),
+      ] as [T | undefined, T | undefined]
+    )
+    .map(([a, b]: [T | undefined, T | undefined]) =>
+      [
+        numberFrom(validNumberStrings, a),
+        numberFrom(validNumberStrings, b),
+      ] as CalibrationNumbers
+    )
     .map(([a, b]: CalibrationNumbers) => a * 10 + b);
 }
 
@@ -15,55 +28,88 @@ function add(acc: number, curr: number): number {
   return acc + curr;
 }
 
-export function firstChar(line: string): string {
-  const char = line.at(0);
-  if (char === undefined) {
-    throw new Error(
-      `firstChar of ${JSON.stringify(line)} is unexpectedly undefined`,
-    );
+const STRING_TO_NUMBER_PART_1 = {
+  "0": 0,
+  "1": 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+} as const;
+const STRING_TO_NUMBER_PART_2 = {
+  ...STRING_TO_NUMBER_PART_1,
+  "zero": 0,
+  "one": 1,
+  "two": 2,
+  "three": 3,
+  "four": 4,
+
+  "five": 5,
+  "six": 6,
+  "seven": 7,
+  "eight": 8,
+  "nine": 9,
+} as const;
+
+type ValidNumberString = keyof typeof STRING_TO_NUMBER_PART_2;
+function numberFrom<T extends ValidNumberString>(
+  validNumberStrings: Record<T, number>,
+  s?: T,
+): number {
+  if (s === undefined) {
+    throw new Error(`numberFrom(${JSON.stringify(s)}) is undefined`);
   }
-  return char;
+  return validNumberStrings[s];
 }
 
-export function lastChar(line: string): string {
-  const char = line.at(-1);
-  if (char === undefined) {
-    throw new Error(
-      `lastChar of ${JSON.stringify(line)} is unexpectedly undefined`,
-    );
-  }
-  return char;
+export function firstOccurrenceOfAny<T extends ValidNumberString>(
+  lookForAny: T[],
+): (line: string) => T | undefined {
+  return function (line: string): T | undefined {
+    const lineLength = line.length;
+    for (let i = 0; i < lineLength; i++) {
+      const slice = line.slice(i);
+      const found: T | undefined = lookForAny.find((lookFor) =>
+        slice.startsWith(lookFor)
+      );
+      if (found !== undefined) {
+        return found;
+      }
+    }
+  };
 }
 
-export function spelledOutToNumberString(input: string): string {
-  return input
-    .replace(/zero/g, "0")
-    .replace(/one/g, "1")
-    .replace(/two/g, "2")
-    .replace(/three/g, "3")
-    .replace(/four/g, "4")
-    .replace(/five/g, "5")
-    .replace(/six/g, "6")
-    .replace(/seven/g, "7")
-    .replace(/eight/g, "8")
-    .replace(/nine/g, "9");
+export function lastOccurrenceOfAny<T extends ValidNumberString>(
+  lookForAny: T[],
+): (line: string) => T | undefined {
+  return function (line: string): T | undefined {
+    const lineLength = line.length;
+    for (let i = lineLength; i > 0; i--) {
+      const slice = line.slice(0, i);
+      const found: T | undefined = lookForAny.find((lookFor) =>
+        slice.endsWith(lookFor)
+      );
+      if (found !== undefined) {
+        return found;
+      }
+    }
+  };
 }
 
-Deno.test("firstChar returns first character", function () {
-  assertEquals("0", firstChar("0123456789"));
-});
-
-Deno.test("lastChar returns last character", function () {
-  assertEquals("9", lastChar("0123456789"));
-});
-
-Deno.test("part 1: example input returns correct ourput", function () {
+Deno.test("part 1: example input returns correct output", function () {
   const input = `1abc2
 pqr3stu8vwx
 a1b2c3d4e5f
 treb7uchet`;
   const expected = [12, 38, 15, 77];
-  const actual: number[] = extractCalibrationNumbers(input);
+  const actual: number[] = extractCalibrationNumbers(
+    STRING_TO_NUMBER_PART_1,
+    input,
+  );
   assertEquals(expected, actual);
 
   const expectedSum = 142;
@@ -72,16 +118,16 @@ treb7uchet`;
 });
 
 Deno.test("part 2: example input returns correct output", function () {
-  const input = spelledOutToNumberString(`two1nine
+  const input = `two1nine
 eightwothree
 abcone2threexyz
 xtwone3four
 4nineeightseven2
 zoneight234
 7pqrstsixteen
-`);
+`;
   const expected = [29, 83, 13, 24, 42, 14, 76];
-  const actual = extractCalibrationNumbers(input);
+  const actual = extractCalibrationNumbers(STRING_TO_NUMBER_PART_2, input);
   assertEquals(expected, actual);
 
   const expectedSum = 281;
@@ -1089,9 +1135,12 @@ bdmdqptkjzn74
 lsmcmgtflzxmszdkjmdsklrgvtcdlpx4
 xsftnb6mvgqxv17four
 7gqqvzkvzbvxghxonekqvsteight
-nineninekfp49
-`;
+nineninekfp49`;
   const expectedSum = 56397;
-  const actualSum = extractCalibrationNumbers(input).reduce(add, 0);
+  const actualSum = extractCalibrationNumbers(STRING_TO_NUMBER_PART_1, input)
+    .reduce(
+      add,
+      0,
+    );
   assertEquals(expectedSum, actualSum);
 });
